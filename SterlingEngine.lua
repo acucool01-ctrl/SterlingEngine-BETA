@@ -16,6 +16,7 @@ local RunService         = game:GetService("RunService")
 local MarketplaceService = game:GetService("MarketplaceService")
 local HttpService        = game:GetService("HttpService")
 local ReplicatedStorage  = game:GetService("ReplicatedStorage")
+local TextChatService    = game:GetService("TextChatService")
 
 local LocalPlayer = Players.LocalPlayer
 
@@ -41,10 +42,11 @@ local function on(signal, fn)
 end
 
 --========================= SAVE =========================--
-local SAVE_DIR = "SterlingEngine"
+local SAVE_DIR = "Sterling Engine"
 local LAYOUT_FILE = SAVE_DIR .. "/layout.json"
 local CHAT_FILE = SAVE_DIR .. "/chat.json"
 local OLD_LAYOUT = "SterlingEngine_layout.json"
+local OLD_SAVE_DIR = "SterlingEngine"
 
 local function hasFileApi()
     return writefile ~= nil and readfile ~= nil and isfile ~= nil
@@ -87,11 +89,39 @@ end
 local function loadLayout()
     local data = readJson(LAYOUT_FILE)
     if data then return data end
+    data = readJson(OLD_SAVE_DIR .. "/layout.json")
+    if data then
+        saveLayout(data)
+        return data
+    end
     data = readJson(OLD_LAYOUT)
     if data then
         saveLayout(data)
     end
     return data
+end
+
+local function loadChatHistory()
+    local data = readJson(CHAT_FILE)
+    if data then return data end
+    data = readJson(OLD_SAVE_DIR .. "/chat.json")
+    if data then
+        writeJson(CHAT_FILE, data)
+    end
+    return data or {}
+end
+
+local function cleanupLegacyStorage()
+    pcall(function()
+        if delfile and isfile and isfile(OLD_LAYOUT) then
+            delfile(OLD_LAYOUT)
+        end
+    end)
+    pcall(function()
+        if delfolder and isfolder and isfolder(OLD_SAVE_DIR) then
+            delfolder(OLD_SAVE_DIR)
+        end
+    end)
 end
 
 --========================= EGG DATA =========================--
@@ -125,7 +155,7 @@ local EGG_DB = {
     ["Solaris Egg"]    = { Rarity = "Ethereal", Luck = 363000000000 },
     ["Cherub Egg"]     = { Rarity = "Ethereal", Luck = 1000000000000 },
     ["Volcanic Egg"]   = { Rarity = "Ethereal", Luck = 2500000000000 },
-    ["Halloween Egg"]  = { Rarity = "Event",    Luck = 1000000000000 },
+    ["Halloween Egg"]  = { Rarity = "Event",    Luck = 0 },
 }
 
 local RARITY_ORDER = {
@@ -1213,7 +1243,7 @@ local function buildChatPage()
     send.Parent = row
     corner(send, 8)
 
-    local messages = readJson(CHAT_FILE) or {}
+    local messages = loadChatHistory()
     local seen = {}
     local function remember(msg)
         local id = tostring(msg.id or (tostring(msg.userId) .. ":" .. tostring(msg.at) .. ":" .. tostring(msg.text)))
@@ -1307,8 +1337,8 @@ local function buildChatPage()
             userId = LocalPlayer.UserId,
             name = LocalPlayer.DisplayName,
             text = text,
-            clock = os.date("%H:%M"),
-            at = os.time(),
+            clock = os.date and os.date("%H:%M") or "now",
+            at = os.time and os.time() or math.floor(workspace:GetServerTimeNow()),
         }
         addMessage(msg, true)
         pcall(function()
@@ -1347,7 +1377,13 @@ local function buildChatPage()
 end
 
 local function httpGet(url)
-    local requester = request or http_request or (syn and syn.request)
+    local synRequest = nil
+    pcall(function()
+        if type(syn) == "table" then
+            synRequest = syn.request
+        end
+    end)
+    local requester = request or http_request or synRequest
     if requester then
         local ok, res = pcall(function()
             return requester({ Url = url, Method = "GET" })
@@ -1502,9 +1538,292 @@ local function buildPrivatePage()
     end)
 end
 
-buildAutoPage()
-buildChatPage()
-buildPrivatePage()
+local OwnerBanner = Instance.new("Frame")
+OwnerBanner.Name = "SterlingOwnerMessage"
+OwnerBanner.AnchorPoint = Vector2.new(0.5, 0)
+OwnerBanner.Position = UDim2.new(0.5, 0, 0, 82)
+OwnerBanner.Size = UDim2.new(0.86, 0, 0, 78)
+OwnerBanner.BackgroundColor3 = Color3.fromRGB(16, 16, 18)
+OwnerBanner.BorderSizePixel = 0
+OwnerBanner.Visible = false
+OwnerBanner.ClipsDescendants = true
+OwnerBanner.ZIndex = 50
+OwnerBanner.Parent = ScreenGui
+corner(OwnerBanner, 12)
+stroke(OwnerBanner, Color3.fromRGB(220, 220, 220), 1.4, 0.12)
+local ownerBannerCap = Instance.new("UISizeConstraint")
+ownerBannerCap.MaxSize = Vector2.new(420, 90)
+ownerBannerCap.Parent = OwnerBanner
+
+local OwnerBannerTitle = Instance.new("TextLabel")
+OwnerBannerTitle.BackgroundTransparency = 1
+OwnerBannerTitle.Position = UDim2.fromOffset(10, 6)
+OwnerBannerTitle.Size = UDim2.new(1, -20, 0, 18)
+OwnerBannerTitle.Font = Enum.Font.GothamBold
+OwnerBannerTitle.TextSize = 12
+OwnerBannerTitle.TextXAlignment = Enum.TextXAlignment.Left
+OwnerBannerTitle.TextTruncate = Enum.TextTruncate.AtEnd
+OwnerBannerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+OwnerBannerTitle.Text = "Sterling Engine | Owner Message"
+OwnerBannerTitle.ZIndex = 51
+OwnerBannerTitle.Parent = OwnerBanner
+
+local OwnerBannerText = Instance.new("TextLabel")
+OwnerBannerText.BackgroundTransparency = 1
+OwnerBannerText.Position = UDim2.fromOffset(10, 26)
+OwnerBannerText.Size = UDim2.new(1, -20, 1, -32)
+OwnerBannerText.Font = Enum.Font.Gotham
+OwnerBannerText.TextSize = 13
+OwnerBannerText.TextWrapped = true
+OwnerBannerText.TextXAlignment = Enum.TextXAlignment.Left
+OwnerBannerText.TextYAlignment = Enum.TextYAlignment.Top
+OwnerBannerText.TextColor3 = Color3.fromRGB(235, 235, 235)
+OwnerBannerText.Text = ""
+OwnerBannerText.ZIndex = 51
+OwnerBannerText.Parent = OwnerBanner
+
+local ownerMessageToken = 0
+local function showOwnerMessage(text, seconds)
+    text = tostring(text or "")
+    seconds = math.clamp(tonumber(seconds) or 10, 1, 86400)
+    ownerMessageToken = ownerMessageToken + 1
+    local token = ownerMessageToken
+    OwnerBannerText.Text = text
+    OwnerBanner.Visible = text ~= ""
+    task.delay(seconds, function()
+        if token == ownerMessageToken and OwnerBanner.Parent then
+            OwnerBanner.Visible = false
+        end
+    end)
+end
+
+local function stopOwnerMessage()
+    ownerMessageToken = ownerMessageToken + 1
+    OwnerBanner.Visible = false
+end
+
+local ANNOUNCE_PREFIX = "[STERLING_OWNER|"
+local function readOwnerWire(text, senderId)
+    if type(text) ~= "string" then return end
+    local ownerId, seconds, body = string.match(text, "^%[STERLING_OWNER|(%d+)|(%d+)%](.+)$")
+    ownerId = tonumber(ownerId)
+    if not ownerId or not OWNER_IDS[ownerId] then return end
+    if senderId and tonumber(senderId) ~= ownerId then return end
+    showOwnerMessage(body, tonumber(seconds))
+end
+
+pcall(function()
+    on(TextChatService.MessageReceived, function(message)
+        local source = message.TextSource
+        readOwnerWire(message.Text, source and source.UserId or nil)
+    end)
+end)
+
+local function sendOwnerWire(text, seconds)
+    local payload = ANNOUNCE_PREFIX .. tostring(LocalPlayer.UserId) .. "|" .. tostring(math.floor(seconds)) .. "]" .. text
+    local sent = false
+    pcall(function()
+        local channels = TextChatService:FindFirstChild("TextChannels")
+        local general = channels and (channels:FindFirstChild("RBXGeneral") or channels:FindFirstChildWhichIsA("TextChannel"))
+        if general then
+            general:SendAsync(payload)
+            sent = true
+        end
+    end)
+    if not sent then
+        pcall(function()
+            local events = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+            local say = events and events:FindFirstChild("SayMessageRequest")
+            if say then
+                say:FireServer(payload, "All")
+                sent = true
+            end
+        end)
+    end
+    return sent
+end
+
+local function buildOwnerPage()
+    if not IS_OWNER then return end
+    local page = tabPages["Panel (Only Owner)"]
+    if not page then return end
+
+    local opener = Instance.new("TextButton")
+    opener.BackgroundColor3 = Color3.fromRGB(32, 32, 36)
+    opener.AutoButtonColor = false
+    opener.Size = UDim2.new(1, 0, 0, 40)
+    opener.Font = Enum.Font.GothamSemibold
+    opener.TextSize = 14
+    opener.TextXAlignment = Enum.TextXAlignment.Left
+    opener.TextColor3 = Color3.fromRGB(235, 235, 235)
+    opener.Text = "  Owner Message    >"
+    opener.LayoutOrder = 2
+    opener.Parent = page
+    corner(opener, 10)
+
+    local body = Instance.new("Frame")
+    body.BackgroundTransparency = 1
+    body.Size = UDim2.new(1, 0, 0, 0)
+    body.AutomaticSize = Enum.AutomaticSize.Y
+    body.Visible = false
+    body.LayoutOrder = 3
+    body.Parent = page
+    local bodyLayout = Instance.new("UIListLayout")
+    bodyLayout.Padding = UDim.new(0, 8)
+    bodyLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    bodyLayout.Parent = body
+
+    local durationRow = Instance.new("Frame")
+    durationRow.BackgroundTransparency = 1
+    durationRow.Size = UDim2.new(1, 0, 0, 38)
+    durationRow.LayoutOrder = 1
+    durationRow.Parent = body
+
+    local durationBox = Instance.new("TextBox")
+    durationBox.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+    durationBox.Size = UDim2.new(1, -112, 1, 0)
+    durationBox.Font = Enum.Font.Gotham
+    durationBox.TextSize = 13
+    durationBox.TextColor3 = Color3.fromRGB(235, 235, 235)
+    durationBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
+    durationBox.PlaceholderText = "Duration, for example 60"
+    durationBox.Text = "60"
+    durationBox.ClearTextOnFocus = false
+    durationBox.Parent = durationRow
+    corner(durationBox, 8)
+    pad(durationBox, 8)
+
+    local unit = "Seconds"
+    local unitBtn = Instance.new("TextButton")
+    unitBtn.AnchorPoint = Vector2.new(1, 0)
+    unitBtn.Position = UDim2.new(1, 0, 0, 0)
+    unitBtn.Size = UDim2.new(0, 104, 1, 0)
+    unitBtn.BackgroundColor3 = Color3.fromRGB(42, 42, 46)
+    unitBtn.AutoButtonColor = false
+    unitBtn.Font = Enum.Font.GothamSemibold
+    unitBtn.TextSize = 12
+    unitBtn.TextColor3 = Color3.fromRGB(225, 225, 225)
+    unitBtn.Text = unit
+    unitBtn.Parent = durationRow
+    corner(unitBtn, 8)
+    on(unitBtn.MouseButton1Click, function()
+        unit = unit == "Seconds" and "Minutes" or "Seconds"
+        unitBtn.Text = unit
+    end)
+
+    local hint = Instance.new("TextLabel")
+    hint.BackgroundTransparency = 1
+    hint.Size = UDim2.new(1, 0, 0, 30)
+    hint.Font = Enum.Font.Gotham
+    hint.TextSize = 11
+    hint.TextWrapped = true
+    hint.TextXAlignment = Enum.TextXAlignment.Left
+    hint.TextYAlignment = Enum.TextYAlignment.Top
+    hint.TextColor3 = Color3.fromRGB(150, 150, 150)
+    hint.Text = "60 means 60 seconds or 60 minutes, depending on the selected unit."
+    hint.LayoutOrder = 2
+    hint.Parent = body
+
+    local messageBox = Instance.new("TextBox")
+    messageBox.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+    messageBox.Size = UDim2.new(1, 0, 0, 88)
+    messageBox.Font = Enum.Font.Gotham
+    messageBox.TextSize = 13
+    messageBox.TextWrapped = true
+    messageBox.TextXAlignment = Enum.TextXAlignment.Left
+    messageBox.TextYAlignment = Enum.TextYAlignment.Top
+    messageBox.TextColor3 = Color3.fromRGB(235, 235, 235)
+    messageBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
+    messageBox.PlaceholderText = "Write the owner message here"
+    messageBox.Text = ""
+    messageBox.ClearTextOnFocus = false
+    messageBox.MultiLine = true
+    messageBox.LayoutOrder = 3
+    messageBox.Parent = body
+    corner(messageBox, 8)
+    pad(messageBox, 8)
+
+    local action = Instance.new("TextButton")
+    action.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+    action.AutoButtonColor = false
+    action.Size = UDim2.new(1, 0, 0, 40)
+    action.Font = Enum.Font.GothamBold
+    action.TextSize = 13
+    action.TextColor3 = Color3.fromRGB(18, 18, 18)
+    action.Text = "Run"
+    action.LayoutOrder = 4
+    action.Parent = body
+    corner(action, 8)
+
+    local status = Instance.new("TextLabel")
+    status.BackgroundTransparency = 1
+    status.Size = UDim2.new(1, 0, 0, 18)
+    status.Font = Enum.Font.Gotham
+    status.TextSize = 11
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.TextTruncate = Enum.TextTruncate.AtEnd
+    status.TextColor3 = Color3.fromRGB(160, 160, 160)
+    status.Text = "Stopped"
+    status.LayoutOrder = 5
+    status.Parent = body
+
+    local opened = false
+    local running = false
+    on(opener.MouseButton1Click, function()
+        opened = not opened
+        body.Visible = opened
+        opener.Text = opened and "  Owner Message    v" or "  Owner Message    >"
+    end)
+    on(action.MouseButton1Click, function()
+        if running then
+            running = false
+            action.Text = "Run"
+            status.Text = "Stopped"
+            stopOwnerMessage()
+            return
+        end
+        local text = string.gsub(messageBox.Text or "", "^%s+", "")
+        text = string.gsub(text, "%s+$", "")
+        if text == "" then
+            status.Text = "Write a message first"
+            return
+        end
+        if #text > 220 then
+            text = string.sub(text, 1, 220)
+            messageBox.Text = text
+        end
+        local amount = math.clamp(tonumber(durationBox.Text) or 60, 1, 1440)
+        durationBox.Text = tostring(amount)
+        local seconds = unit == "Minutes" and amount * 60 or amount
+        running = true
+        action.Text = "Stop"
+        status.Text = "Running for " .. tostring(amount) .. " " .. string.lower(unit)
+        showOwnerMessage(text, seconds)
+        sendOwnerWire(text, seconds)
+        local token = ownerMessageToken
+        task.delay(seconds, function()
+            if token == ownerMessageToken and action.Parent then
+                running = false
+                action.Text = "Run"
+                status.Text = "Finished"
+            end
+        end)
+    end)
+end
+
+local function safeBuild(name, fn)
+    local ok, err = xpcall(fn, function(message)
+        return tostring(message)
+    end)
+    if not ok then
+        warn("[Sterling Engine] " .. name .. " page: " .. tostring(err))
+    end
+end
+
+safeBuild("Auto", buildAutoPage)
+safeBuild("Live Chat", buildChatPage)
+safeBuild("Private Server", buildPrivatePage)
+safeBuild("Owner", buildOwnerPage)
 selectTab("Main")
 
 --========================= DRAG / RESIZE =========================--
@@ -2834,7 +3153,9 @@ local function makeCard(row)
         task.spawn(function()
             local ok, err = xpcall(function()
                 runSteal(rec.row, mode)
-            end, debug.traceback)
+            end, function(message)
+                return tostring(message)
+            end)
             if not ok then
                 warn("[Sterling] " .. tostring(err))
                 setStatus("Error", row.Id)
@@ -3216,10 +3537,11 @@ applyMenuPos((vp.X - w) / 2, (vp.Y - h) / 2)
 
 local ix = saved and tonumber(saved.ix) or 18
 local iy = saved and tonumber(saved.iy) or (vp.Y - 78)
-11applyIconPos(ix, iy)
+applyIconPos(ix, iy)
 Icon.Visible = false
 Main.Visible = true
 doSave()
+cleanupLegacyStorage()
 
 _G.SterlingEngine = {
     Unload = unload,
