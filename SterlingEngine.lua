@@ -125,7 +125,7 @@ local EGG_DB = {
     ["Solaris Egg"]    = { Rarity = "Ethereal", Luck = 363000000000 },
     ["Cherub Egg"]     = { Rarity = "Ethereal", Luck = 1000000000000 },
     ["Volcanic Egg"]   = { Rarity = "Ethereal", Luck = 2500000000000 },
-    ["Halloween Egg"]  = { Rarity = "Event",    Luck = 0 },
+    ["Halloween Egg"]  = { Rarity = "Event",    Luck = 1000000000000 },
 }
 
 local RARITY_ORDER = {
